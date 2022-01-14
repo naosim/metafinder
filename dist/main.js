@@ -1,3 +1,18 @@
+const { execSync  } = require('child_process');
+const fs = require('fs');
+function getMarkdownOrTextFilePathList() {
+    const commandResult = execSync('find .').toString();
+    const list = commandResult.split("\n").filter((v)=>v.indexOf("/.") == -1
+    ).filter((v)=>v.slice(-3) == ".md" || v.slice(-4) == ".txt"
+    );
+    return list;
+}
+function loadFile(path) {
+    return fs.readFileSync(path, 'utf8');
+}
+function saveJson(path, obj) {
+    fs.writeFileSync(path, JSON.stringify(obj));
+}
 function isNothing(subject) {
     return typeof subject === 'undefined' || subject === null;
 }
@@ -2606,44 +2621,42 @@ var jsYaml = {
     safeLoadAll: safeLoadAll,
     safeDump: safeDump
 };
-const { execSync  } = require('child_process');
-const fs = require('fs');
-function getMarkdownOrTextFilePathList() {
-    const commandResult = execSync('find .').toString();
-    const list = commandResult.split("\n").filter((v)=>v.indexOf("/.") == -1
-    ).filter((v)=>v.slice(-3) == ".md" || v.slice(-4) == ".txt"
-    );
-    return list;
-}
-function loadFile(path) {
-    return fs.readFileSync(path, 'utf8');
-}
-function saveJson(path, obj) {
-    fs.writeFileSync(path, JSON.stringify(obj));
-}
 function getMetaData(text) {
-    const rows = text.trim().split("\n").map((v)=>v.trim()
+    const formated = text.trim().split("\n").map((v)=>v.trim()
+    ).join("\n");
+    const sections = formated.split("\n\n").map((v)=>v.trim()
     );
-    if (rows[0].split(":").length != 2) {
-        return {
-        };
-    }
-    const metaRawLines = [];
-    for(let i1 = 0; i1 < rows.length; i1++){
-        if (rows[i1].length == 0) {
-            break;
+    return sections.filter((v, i1)=>{
+        if (i1 == 0) {
+            return true;
         }
-        metaRawLines.push(rows[i1]);
-    }
-    return jsYaml.load(metaRawLines.join("\n"), undefined);
+        const firstLine = v.split("\n")[0];
+        return firstLine.slice(-4) == "meta";
+    }).map((v)=>{
+        const rows = v.split("\n");
+        if (rows[0].slice(-4) == "meta") {
+            v = rows.slice(1).join("\n");
+        }
+        try {
+            const result = jsYaml.load(v, undefined);
+            return typeof result == "object" ? result : null;
+        } catch (e) {
+            return null;
+        }
+    }).filter((v)=>v != null
+    );
 }
 const files = getMarkdownOrTextFilePathList();
-const data = files.map((v)=>{
+var data = [];
+files.map((v)=>{
     const text = loadFile(v);
-    return {
-        path: v,
-        meta: getMetaData(text)
-    };
+    getMetaData(text).map((m)=>{
+        return {
+            path: v,
+            meta: m
+        };
+    }).forEach((v1)=>data.push(v1)
+    );
 });
 saveJson("./data.json", data);
 console.log("const data =", JSON.stringify(data, null, "  "));
